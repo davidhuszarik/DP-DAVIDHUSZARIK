@@ -63,7 +63,6 @@ st.markdown(
 
 menu_options = [
     "Úvod do LPN",
-    "Simulácia BKW"
 ]
 
 with st.sidebar:
