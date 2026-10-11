@@ -215,7 +215,7 @@ def render():
         f"$$\\langle x, g_{{{selected_col}}} \\rangle = {eval_steps_str} = {dot_prod} \\pmod 2$$\n\n"
         f"**2. Krok: Pripočítanie šumu $e_{{{selected_col}}}$ mod 2**\n"
         f"$$z_{{{selected_col}}} = (x \\cdot g_{{{selected_col}}}) \\oplus e_{{{selected_col}}} = {dot_prod} \\oplus {e_i} = \\mathbf{{{z_i}}}$$\n\n"
-        f"👉 *Výsledok:* Šum pre túto vzorku je $e_{{{selected_col}}} = {e_i}$, takže {status_e}."
+        f"*Výsledok:* Šum pre túto vzorku je $e_{{{selected_col}}} = {e_i}$, takže {status_e}."
     )
 
     col_names = [
