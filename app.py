@@ -63,6 +63,7 @@ st.markdown(
 
 menu_options = [
     "Úvod do LPN",
+    "BKW"
 ]
 
 with st.sidebar:
