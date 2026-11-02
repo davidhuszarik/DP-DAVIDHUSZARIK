@@ -1,6 +1,6 @@
 import streamlit as st
 
-from views import bkw_simulation, covering_codes, crypto_impact, lpn_intro
+from views import bkw_simulation, lpn_intro
 
 st.set_page_config(
     page_title="learnBKW | LPN & BKW Educational App",
