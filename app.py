@@ -62,8 +62,8 @@ st.markdown(
 )
 
 menu_options = [
-    "Úvod do LPN",
-    "BKW"
+    "LPN Problem",
+    "BKW Algoritmus"
 ]
 
 with st.sidebar:
@@ -75,7 +75,7 @@ with st.sidebar:
         label_visibility="visible",
     )
 
-st.title("Edukačná aplikácia: LPN a BKW pomocou")
+st.title("learnBKW: Ako BKW krok za krokom poráža šum v LPN")
 
 if selected_index == 0:
     lpn_intro.render()

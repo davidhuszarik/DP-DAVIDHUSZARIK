@@ -101,7 +101,7 @@ def generate_detailed_run_data(c_true, a, b, n_samples, eta, run_seed):
     history = [
         {
             "step": 0,
-            "sample_type": "0-vzorka (Východiskový stav)",
+            "sample_type": "0-vzorka (východiskový stav)",
             "X": X_0.copy(),
             "ell": ell_0.copy(),
             "e": e_0.copy(),
@@ -139,9 +139,9 @@ def generate_detailed_run_data(c_true, a, b, n_samples, eta, run_seed):
         for pattern, indices in partitions.items():
             classes_info.append(
                 {
-                    "Vzor bloku": "".join(map(str, pattern)),
-                    "Počet vektorov": len(indices),
-                    "Vzniknuté vzorky": max(0, len(indices) - 1),
+                    "Vzor v bloku": "".join(map(str, pattern)),
+                    "Počet riadkov": len(indices),
+                    "Vzniknuté nové riadky": max(0, len(indices) - 1),
                 }
             )
 
@@ -163,12 +163,12 @@ def generate_detailed_run_data(c_true, a, b, n_samples, eta, run_seed):
                     if len(operations_log) < 50:
                         operations_log.append(
                             {
-                                "Vzor bloku": "".join(map(str, pattern)),
+                                "Vzor v bloku": "".join(map(str, pattern)),
                                 "Pivot (#)": pivot_idx,
                                 "Cieľ (#)": other_idx,
-                                "e_pivot": int(e_curr[pivot_idx]),
-                                "e_cieľ": int(e_curr[other_idx]),
-                                "e_výsledok (XOR)": res_e,
+                                "Chyba pivota": int(e_curr[pivot_idx]),
+                                "Chyba cieľa": int(e_curr[other_idx]),
+                                "Výsledná chyba": res_e,
                                 "Výsledný vektor": "".join(map(str, res_vec)),
                             }
                         )
@@ -283,7 +283,7 @@ def run_large_scale_simulation(a, b, n_samples, eta, n_runs, base_seed):
 # 5. HLAVNÉ POUŽÍVATEĽSKÉ ROZHRANIE
 # ==============================================================================
 def render():
-    st.header("🛡️ BKW Algoritmus: Väčšinové Hlasovanie & Teoretické Medze")
+    st.header("2. Pôvodný BKW algoritmus")
 
     # Konfigurácia parametrov
     col_c1, col_c2, col_c3, col_c4 = st.columns(4)
@@ -325,7 +325,7 @@ def render():
 
     with col_c4:
         seed = st.number_input(
-            "Základný Seed generátora", min_value=1, max_value=9999, value=42
+            "Základný seed generátora", min_value=1, max_value=9999, value=42
         )
         st.caption(f"Teoretické $N_{{\\min}}$ (istota {desired_confidence * 100:.1f} %):")
         if n_min_theor != float("inf"):
@@ -333,7 +333,7 @@ def render():
         else:
             st.warning("Príliš nízky bias")
 
-    st.markdown("#### ⚙️ Rozsah simulácie väčšinového hlasovania")
+    st.markdown("#### Rozsah simulácie väčšinového hlasovania")
     col_n1, col_n2 = st.columns([3, 1])
     with col_n1:
         default_runs = (
@@ -342,7 +342,7 @@ def render():
             else 100
         )
         n_runs = st.number_input(
-            "Celkový počet opakovaní / behov (N):",
+            "Celkový počet behov (N):",
             min_value=5,
             max_value=5000,
             value=int(default_runs),
@@ -378,29 +378,29 @@ def render():
     st.divider()
     m1, m2, m3, m4 = st.columns(4)
     with m1:
-        st.metric("Skutočný kľúč c", f"{list(c_true)}", f"1. bit c₁ = {true_c1}")
+        st.metric("Skutočný kľúč c", f"{c_true.tolist()}", f"1. bit c₁ = {true_c1}")
     with m2:
         st.metric(
             "Výsledok väčšiny (ĉ₁)",
             f"{winner}" if winner != -1 else "Remíza",
-            "Správne odhalený ✅" if is_winner_correct else "Chyba ❌",
+            "Správne odhalený" if is_winner_correct else "Chyba",
         )
     with m3:
         st.metric(
-            "Pomer platných hlasov [0 : 1]",
+            "Pomer hlasov [0 : 1]",
             f"{votes_0_total} : {votes_1_total}",
             f"Z {total_valid} úspešných behov",
         )
     with m4:
         st.metric(
-            "Hoeffding P(chyba väčšiny)",
+            "Horná hranica chyby",
             f"{hoeffding_error_bound:.4e}",
             f"Cieľová δ = {delta:.3f}",
         )
 
     with st.expander(
-            "📐 Teoretický rozbor a vzorce z práce (kliknite pre zobrazenie)",
-            expanded=False,
+        "Teoretický rozbor a vzorce (kliknite pre zobrazenie)",
+        expanded=False,
     ):
         st.markdown(
             f"""
@@ -422,7 +422,7 @@ def render():
 
     # SEKCIA 1: GRAFY HLASOVANIA
     st.subheader(
-        f"📊 1. Priebeh Väčšinového Hlasovania v Čase (N = {n_runs} behov)"
+        f"1. Priebeh väčšinového hlasovania (N = {n_runs} behov)"
     )
 
     g_col1, g_col2 = st.columns(2)
@@ -445,8 +445,8 @@ def render():
             )
         )
         fig_votes.update_layout(
-            title="Kumulatívny súčet hlasov",
-            xaxis_title="Číslo behu (nezávislé orákulum)",
+            title="Vývoj počtu hlasov v čase",
+            xaxis_title="Číslo behu",
             yaxis_title="Celkový počet hlasov",
             height=320,
             margin=dict(l=20, r=20, t=35, b=20),
@@ -459,7 +459,7 @@ def render():
             go.Scatter(
                 y=cum_ratio,
                 mode="lines",
-                name="Podiel správneho bitu",
+                name="Úspešnosť správneho bitu",
                 line=dict(color="#2ca02c", width=2),
             )
         )
@@ -467,16 +467,16 @@ def render():
             y=0.5,
             line_dash="dash",
             line_color="red",
-            annotation_text="50 % (Hranica náhody)",
+            annotation_text="50 % (hranica náhody)",
         )
         fig_ratio.add_hline(
             y=theory["p_success_single"],
             line_dash="dot",
             line_color="blue",
-            annotation_text=f"Teoretická P = {theory['p_success_single']:.3f}",
+            annotation_text=f"Teoretická hodnota ({theory['p_success_single'] * 100:.1f} %)",
         )
         fig_ratio.update_layout(
-            title=f"Podiel správneho bitu (c₁ = {true_c1})",
+            title=f"Podiel hlasov pre správny bit (c₁ = {true_c1})",
             xaxis_title="Číslo behu",
             yaxis_title="Podiel hlasov",
             yaxis_range=[0, 1],
@@ -487,7 +487,7 @@ def render():
 
     df_summary = pd.DataFrame(runs_summary)
     with st.expander(
-            f"📋 Tabuľka výsledkov všetkých {n_runs} behov (kliknite pre zobrazenie)"
+        f"Tabuľka výsledkov všetkých {n_runs} behov (kliknite pre zobrazenie)"
     ):
         st.dataframe(
             df_summary[
@@ -509,10 +509,10 @@ def render():
     st.divider()
 
     # SEKCIA 2: DETAILNÝ INŠPEKTOR VYBRANÉHO BEHU
-    st.subheader("🔍 2. Hĺbkový Inšpektor Ľubovoľného Behu")
+    st.subheader("2. Detail vybraného behu")
 
     selected_run_idx = st.number_input(
-        f"Zadajte číslo behu na preskúmanie (1 až {n_runs}):",
+        f"Zadajte číslo behu na zobrazenie (1 až {n_runs}):",
         min_value=1,
         max_value=n_runs,
         value=1,
@@ -527,11 +527,11 @@ def render():
 
     c_run1, c_run2, c_run3, c_run4 = st.columns(4)
     with c_run1:
-        st.info(f"**Vybraný: Beh #{selected_run_idx}**")
+        st.info(f"**Zobrazený beh #{selected_run_idx}**")
     with c_run2:
         st.metric(
-            "Nájdený bázový vektor e₁",
-            "Áno ✅" if chosen_run_data["found"] else "Nie ❌",
+            "Nájdený cieľový vektor e₁",
+            "Áno" if chosen_run_data["found"] else "Nie",
             f"Vyskytol sa {chosen_run_data['matches_count']}×",
         )
     with c_run3:
@@ -546,20 +546,20 @@ def render():
         )
     with c_run4:
         st.metric(
-            "Kumulovaná chyba (e)",
+            "Výsledná chyba (e)",
             f"{chosen_run_data['err']}" if chosen_run_data["found"] else "—",
-            "0 = Správny | 1 = Prevrátený",
+            "0 = bez chyby | 1 = chyba",
         )
 
     # SEKCIA 3: DETAIL VŠETKÝCH KROKOV VO VYBRANOM BEHU
     st.markdown("---")
     st.markdown(
-        f"#### 🪜 Kroky eliminácie v rámci Behu #{selected_run_idx} (Lemma 4)"
+        f"#### Kroky eliminácie v behu #{selected_run_idx}"
     )
 
     max_steps_in_run = len(run_history) - 1
     selected_step = st.slider(
-        f"Vyberte krok eliminácie v rámci Behu #{selected_run_idx}:",
+        f"Vyberte krok eliminácie v behu #{selected_run_idx}:",
         min_value=0,
         max_value=max_steps_in_run,
         value=max_steps_in_run,
@@ -570,19 +570,19 @@ def render():
     X_step = step_data["X"]
 
     st.markdown(
-        f"**Aktuálny stav:** `{step_data['sample_type']}` | Počet prežívajúcich vektorov: **{len(X_step)}**"
+        f"**Aktuálny stav:** `{step_data['sample_type']}` | Počet zostávajúcich riadkov: **{len(X_step)}**"
     )
 
     col_mat, col_cls = st.columns([3, 2])
     with col_mat:
         st.markdown(
-            f"##### Matica $X$ v Kroku {selected_step} (Zobrazených max 35 riadkov)"
+            f"##### Matica vzoriek X v kroku {selected_step} (zobrazených max 35 riadkov)"
         )
         disp_rows = min(len(X_step), 35)
         fig_mat = px.imshow(
             X_step[:disp_rows, :],
             color_continuous_scale=[[0, "#ffffff"], [1, "#1f77b4"]],
-            labels=dict(x="Stĺpec (Bit)", y="Riadok (Vektor)", color="Bit"),
+            labels=dict(x="Stĺpec (bit)", y="Riadok (vzorka)", color="Bit"),
         )
         fig_mat.update_layout(
             coloraxis_showscale=False,
@@ -600,7 +600,7 @@ def render():
         st.plotly_chart(fig_mat, use_container_width=True)
 
     with col_cls:
-        st.markdown(f"##### Triedy ekvivalencie v Kroku {selected_step}")
+        st.markdown(f"##### Skupiny rovnakých vektorov v kroku {selected_step}")
         if step_data["classes_info"]:
             st.dataframe(
                 pd.DataFrame(step_data["classes_info"]),
@@ -608,17 +608,17 @@ def render():
                 use_container_width=True,
             )
             st.caption(
-                f"Zahodených pivotov v tomto kroku: **{step_data['pivots_discarded']}**"
+                f"Zahodených riadkov bez páru v tomto kroku: **{step_data['pivots_discarded']}**"
             )
         else:
-            st.info("Krok 0: Východiskový stav pred elimináciou.")
+            st.info("Krok 0: východiskový stav pred elimináciou.")
 
     if step_data["operations_log"]:
         st.markdown(
-            f"##### 🔬 Presný Log XOR Operácií v Kroku {selected_step}"
+            f"##### Záznam operácií XOR v kroku {selected_step}"
         )
         st.caption(
-            "Ukážka sčítania s pivotom a XOR-ovania chybových bitov:"
+            "Ukážka sčítania dvoch riadkov a prenosu chýb:"
         )
         st.dataframe(
             pd.DataFrame(step_data["operations_log"]),
@@ -628,7 +628,7 @@ def render():
 
     if selected_step == max_steps_in_run and chosen_run_data["found"]:
         st.markdown(
-            f"##### 🧬 Rodokmeň Bázového Vektora $e_1$ v Behu #{selected_run_idx}"
+            f"##### Pôvod vektora e₁ v behu #{selected_run_idx}"
         )
         first_match_idx = chosen_run_data["matches_indices"][0]
         src_row_ids = step_data["lineage"][first_match_idx]
@@ -644,7 +644,11 @@ def render():
 
         st.dataframe(df_lineage, use_container_width=True)
         st.success(
-            f"Tento vektor $e_1$ vznikol ako XOR súčet presne **{len(src_row_ids)} pôvodných vzoriek** "
+            f"Tento vektor $e_1$ vznikol sčítaním presne **{len(src_row_ids)} pôvodných rovníc** "
             f"(teoreticky $2^{{a-1}} = {2 ** (a - 1)}$). "
-            f"Výsledná kumulovaná chyba: $\\sum e_i \\pmod 2 = {sum(orig_e) % 2}$."
+            f"Výsledná chyba po sčítaní: $\\sum e_i \\pmod 2 = {sum(orig_e) % 2}$."
         )
+
+
+if __name__ == "__main__":
+    render()
