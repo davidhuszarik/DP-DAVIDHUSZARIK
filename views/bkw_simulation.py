@@ -5,17 +5,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 
-# ==============================================================================
-# 1. TEORETICKÉ VÝPOČTY PODĽA PRÁCE (LEMMA 3 A HOEFFDINGOVA NEROVNOSŤ)
-# ==============================================================================
 def compute_bkw_theory(a: int, eta: float, delta: float = 0.05):
-    """Vypočíta teoretické parametre BKW a minimálny potrebný počet behov N_min:
-
-    - bias epsilon = 1 - 2*eta
-    - akumulovaný počet rovníc: 2^(a-1)
-    - odchýlka gamma = 1/2 * (1 - 2*eta)^(2^(a-1))
-    - N_min = ln(1 / delta) / (2 * gamma^2)
-    """
     initial_bias = 1.0 - 2.0 * eta
     accumulated_eqs = 2 ** (a - 1)
     theoretical_bias = initial_bias ** accumulated_eqs
@@ -37,11 +27,7 @@ def compute_bkw_theory(a: int, eta: float, delta: float = 0.05):
     }
 
 
-# ==============================================================================
-# 2. RÝCHLE ŠTATISTICKÉ JADRO PRE VEĽKÉ MNOŽSTVÁ BEHOV (N až do 10 000)
-# ==============================================================================
 def execute_fast_single_run(c_true, a, b, n_samples, eta, run_seed):
-    """Rýchla realizácia 1 behu bez ukladania ťažkých matíc do pamäte."""
     np.random.seed(run_seed)
     k = a * b
 
@@ -85,11 +71,7 @@ def execute_fast_single_run(c_true, a, b, n_samples, eta, run_seed):
     return False, None, None, 0
 
 
-# ==============================================================================
-# 3. HĹBKOVÝ GENERÁTOR PRE 1 VYBRANÝ BEH (NA POŽIADANIE)
-# ==============================================================================
 def generate_detailed_run_data(c_true, a, b, n_samples, eta, run_seed):
-    """Vygeneruje kompletnú históriu, matice, triedy a XOR log pre zvolený beh."""
     np.random.seed(run_seed)
     k = a * b
 
@@ -221,9 +203,6 @@ def generate_detailed_run_data(c_true, a, b, n_samples, eta, run_seed):
     }
 
 
-# ==============================================================================
-# 4. HROMADNÝ SIMULÁTOR S VYROVNÁVACOU PAMÄŤOU
-# ==============================================================================
 @st.cache_data
 def run_large_scale_simulation(a, b, n_samples, eta, n_runs, base_seed):
     k = a * b
@@ -279,13 +258,9 @@ def run_large_scale_simulation(a, b, n_samples, eta, n_runs, base_seed):
     return c_true, runs_summary, cum_votes_0, cum_votes_1, cum_ratio_true
 
 
-# ==============================================================================
-# 5. HLAVNÉ POUŽÍVATEĽSKÉ ROZHRANIE
-# ==============================================================================
 def render():
     st.header("2. Pôvodný BKW algoritmus")
 
-    # Konfigurácia parametrov
     col_c1, col_c2, col_c3, col_c4 = st.columns(4)
     with col_c1:
         a = st.number_input("Počet blokov (a)", min_value=2, max_value=5, value=3)
@@ -420,7 +395,6 @@ def render():
 
     st.divider()
 
-    # SEKCIA 1: GRAFY HLASOVANIA
     st.subheader(
         f"1. Priebeh väčšinového hlasovania (N = {n_runs} behov)"
     )
@@ -508,7 +482,6 @@ def render():
 
     st.divider()
 
-    # SEKCIA 2: DETAILNÝ INŠPEKTOR VYBRANÉHO BEHU
     st.subheader("2. Detail vybraného behu")
 
     selected_run_idx = st.number_input(
@@ -551,7 +524,6 @@ def render():
             "0 = bez chyby | 1 = chyba",
         )
 
-    # SEKCIA 3: DETAIL VŠETKÝCH KROKOV VO VYBRANOM BEHU
     st.markdown("---")
     st.markdown(
         f"#### Kroky eliminácie v behu #{selected_run_idx}"
