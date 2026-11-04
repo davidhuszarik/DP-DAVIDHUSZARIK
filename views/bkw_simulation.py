@@ -263,8 +263,28 @@ def render():
 
     col_c1, col_c2, col_c3, col_c4 = st.columns(4)
     with col_c1:
-        a = st.number_input("Počet blokov (a)", min_value=2, max_value=5, value=3)
-        b = st.number_input("Šírka bloku (b)", min_value=1, max_value=3, value=2)
+        a = st.number_input(
+            "Počet blokov (a)",
+            min_value=2,
+            max_value=5,
+            value=3,
+            help=(
+                "Počet blokov, na ktoré rozdelíme kľúč. Algoritmus eliminuje stĺpce "
+                "v (a - 1) krokoch. Vyššie 'a' umožňuje menšiu šírku 'b', ale exponenciálne "
+                "akumuluje šum: konečná rovnica bude súčtom 2^(a-1) pôvodných rovníc."
+            ),
+        )
+        b = st.number_input(
+            "Šírka bloku (b)",
+            min_value=1,
+            max_value=3,
+            value=2,
+            help=(
+                "Šírka jedného bloku v bitoch. Určuje počet možných binárnych vzorov (2^b), "
+                "do ktorých triedime riadky pri hľadaní párov na XOR elimináciu. "
+                "Celková dĺžka tajného kľúča je k = a · b bitov."
+            ),
+        )
         k = int(a * b)
         st.caption(f"Dimenzia kľúča: **k = {k} bitov**")
 
@@ -275,7 +295,11 @@ def render():
             min_value=rec_s,
             max_value=2000,
             value=max(rec_s * 4, 60),
-            help=f"Teoretické minimum Lemmy 4: a · 2^b = {rec_s}",
+            help=(
+                f"Počet počiatočných LPN rovníc vygenerovaných v jednom behu. "
+                f"Podľa Lemmy 4 je teoretické minimum na prežitie eliminácie s = a · 2^b = {rec_s}. "
+                "Vyššia hodnota zabezpečí, že v každom bloku nájdeme dostatok dvojíc na elimináciu."
+            ),
         )
         st.caption(f"Odporúčané minimum na beh: $s = {rec_s}$")
 
@@ -286,12 +310,20 @@ def render():
             max_value=0.45,
             value=0.10,
             step=0.01,
+            help=(
+                "Pravdepodobnosť výskytu Bernoulliho chyby e = 1 v označení vzorky (ℓ = ⟨x, c⟩ ⊕ e). "
+                "Pri η = 0 ide o bežnú lineárnu algebru bez šumu. "
+                "Pri η = 0.5 je šum úplne náhodný a kľúč sa nedá zistiť žiadnym algoritmom."
+            ),
         )
         desired_confidence = st.selectbox(
             "Požadovaná istota (1 - δ)",
             [0.95, 0.99, 0.999],
             index=0,
-            help="Pravdepodobnosť, že väčšinové hlasovanie určí bit správne.",
+            help=(
+                "Pravdepodobnosť, že celkové väčšinové hlasovanie naprieč N behmi správne určí hľadaný bit kľúča. "
+                "Číslo δ predstavuje maximálnu tolerovanú pravdepodobnosť chyby väčšiny."
+            ),
         )
         delta = 1.0 - desired_confidence
 
@@ -300,13 +332,60 @@ def render():
 
     with col_c4:
         seed = st.number_input(
-            "Základný seed generátora", min_value=1, max_value=9999, value=42
+            "Základný seed generátora",
+            min_value=1,
+            max_value=9999,
+            value=42,
+            help=(
+                "Počiatočná hodnota generátora pseudonáhodných čísel. "
+                "Zabezpečuje presnú reprodukovateľnosť rovnakého tajného kľúča c a rovnakých vzoriek."
+            ),
         )
-        st.caption(f"Teoretické $N_{{\\min}}$ (istota {desired_confidence * 100:.1f} %):")
+
         if n_min_theor != float("inf"):
-            st.markdown(f"### **{n_min_theor} behov**")
+            st.metric(
+                label="Min. počet behov ($N_{\\min}$)",
+                value=f"{n_min_theor} behov",
+                delta=f"pre istotu {desired_confidence * 100:.0f} %",
+                delta_color="normal",
+                help=(
+                    f"Minimálny teoretický počet nezávislých behov (N_min = ⌈ln(1/δ) / (2γ²)⌉), "
+                    f"aby väčšinové hlasovanie s pravdepodobnosťou aspoň {desired_confidence * 100:.1f} % "
+                    f"určilo bit správne."
+                ),
+            )
+
+            # Edukatívne vysvetlenie výpočtu
+            detail_box = (
+                st.popover("ℹ️ Ako sa to vyrátalo?", use_container_width=True)
+                if hasattr(st, "popover")
+                else st.expander("ℹ️ Ako sa to vyrátalo?", expanded=False)
+            )
+
+            with detail_box:
+                st.markdown(
+                    f"""
+                    **Postup výpočtu $N_{{\\min}} = {n_min_theor}$ behov:**
+
+                    1. **Akumulácia rovníc v eliminácii:**
+                       Každý beh vyjadrí cieľový vektor $e_1$ ako súčet $s = 2^{{a-1}} = 2^{{{a}-1}} = \\mathbf{{{theory['accumulated_eqs']}}}$ pôvodných rovníc.
+
+                    2. **Konečný bias (Piling-up Lemma):**
+                       Chyby sa sčítajú modulo 2, takže počiatočný bias $\\epsilon_0 = 1 - 2\\eta = {theory['initial_bias']:.2f}$ klesne na:
+                       $$\\epsilon_{{\\text{{final}}}} = (1 - 2\\eta)^s = ({theory['initial_bias']:.2f})^{{{theory['accumulated_eqs']}}} = \\mathbf{{{theory['theoretical_bias']:.4f}}}$$
+
+                    3. **Výhoda nad náhodou ($\\gamma$):**
+                       Úspešnosť jedného behu je $P = \\frac{{1}}{{2}} + \\gamma$:
+                       $$\\gamma = \\frac{{\\epsilon_{{\\text{{final}}}}}}{{2}} = \\frac{{{theory['theoretical_bias']:.4f}}}{{2}} = \\mathbf{{{theory['gamma']:.4f}}}$$
+                       *(Jeden beh trafí správny bit s pravdepodobnosťou len **{theory['p_success_single'] * 100:.2f} %**)*.
+
+                    4. **Hoeffdingova nerovnosť:**
+                       Aby celkové väčšinové hlasovanie zlyhalo s pravdepodobnosťou najviac $\\delta = {delta:.3f}$ (istota **{desired_confidence * 100:.1f} %**):
+                       $$N_{{\\min}} = \\left\\lceil \\frac{{\\ln(1/\\delta)}}{{2\\gamma^2}} \\right\\rceil = \\left\\lceil \\frac{{\\ln(1/{delta:.3f})}}{{2 \\cdot ({theory['gamma']:.4f})^2}} \\right\\rceil = \\mathbf{{{n_min_theor}\\text{{ behov}}}}$$
+                    """
+                )
         else:
-            st.warning("Príliš nízky bias")
+            st.warning("⚠️ Príliš nízky bias (výhoda γ ≈ 0).")
 
     st.markdown("#### Rozsah simulácie väčšinového hlasovania")
     col_n1, col_n2 = st.columns([3, 1])
@@ -322,13 +401,17 @@ def render():
             max_value=5000,
             value=int(default_runs),
             step=10,
-            help="V každom behu orákulum vygeneruje úplne nové vzorky pre ten istý kľúč c.",
+            help=(
+                "Celkový počet nezávislých behov eliminácie. Keďže jeden beh má kvôli šumu len malú "
+                "výhodu (úspešnosť 1/2 + γ), správny bit c₁ určíme až väčšinovým hlasovaním z N behov. "
+                "Čím viac behov vykonáme, tým spoľahlivejšie prekonáme vplyv šumu."
+            ),
         )
     with col_n2:
         st.write("")
         st.write("")
         if n_min_theor != float("inf") and n_min_theor <= 5000:
-            st.info(f"Odporúčané $N \\ge {n_min_theor}$")
+            st.info(f"💡 Teória odporúča: **N ≥ {n_min_theor}** behov")
 
     c_true, runs_summary, cum_0, cum_1, cum_ratio = run_large_scale_simulation(
         a, b, n_samples, eta, n_runs, seed
@@ -353,24 +436,32 @@ def render():
     st.divider()
     m1, m2, m3, m4 = st.columns(4)
     with m1:
-        st.metric("Skutočný kľúč c", f"{c_true.tolist()}", f"1. bit c₁ = {true_c1}")
+        st.metric(
+            "Skutočný kľúč c",
+            f"{c_true.tolist()}",
+            f"1. bit c₁ = {true_c1}",
+            help="Náhodný tajný kľúč c, ktorý bol vygenerovaný orákulom. Algoritmus sa v tejto fáze pokúša zistiť jeho 1. bit c₁.",
+        )
     with m2:
         st.metric(
             "Výsledok väčšiny (ĉ₁)",
             f"{winner}" if winner != -1 else "Remíza",
             "Správne odhalený" if is_winner_correct else "Chyba",
+            help="Hodnota bitu (0 alebo 1), ktorá získala nadpolovičnú väčšinu hlasov zo všetkých úspešných behov.",
         )
     with m3:
         st.metric(
             "Pomer hlasov [0 : 1]",
             f"{votes_0_total} : {votes_1_total}",
             f"Z {total_valid} úspešných behov",
+            help="Rozdelenie hlasov pre jednotlivé bity. Pomer vyjadruje empirický bias v prospech správneho bitu.",
         )
     with m4:
         st.metric(
             "Horná hranica chyby",
             f"{hoeffding_error_bound:.4e}",
             f"Cieľová δ = {delta:.3f}",
+            help="Pravdepodobnosť, že väčšinové hlasovanie zlyhalo po N behoch, ohraničená Hoeffdingovou nerovnosťou exp(-2Nγ²).",
         )
 
     with st.expander(
@@ -490,6 +581,11 @@ def render():
         max_value=n_runs,
         value=1,
         step=1,
+        help=(
+            "Vyberte konkrétny simulačný beh na podrobnú analýzu. "
+            "Uvidíte presný priebeh eliminácie krok po kroku: rozdelenie do tried, "
+            "XOR operácie a rodokmeň cieľového vektora e₁."
+        ),
     )
 
     run_seed = seed * 10000 + selected_run_idx
@@ -506,6 +602,7 @@ def render():
             "Nájdený cieľový vektor e₁",
             "Áno" if chosen_run_data["found"] else "Nie",
             f"Vyskytol sa {chosen_run_data['matches_count']}×",
+            help="Indikuje, či v poslednom kroku eliminácie vznikol hľadaný vektor e₁ = (1, 0, 0, ..., 0).",
         )
     with c_run3:
         st.metric(
@@ -516,12 +613,14 @@ def render():
                 else "Žiadny"
             ),
             f"Skutočný bit c₁ = {true_c1}",
+            help="Hodnota štítku (ℓ) prislúchajúca vektoru e₁. Táto hodnota slúži ako hlas behu pre bit c₁.",
         )
     with c_run4:
         st.metric(
             "Výsledná chyba (e)",
             f"{chosen_run_data['err']}" if chosen_run_data["found"] else "—",
             "0 = bez chyby | 1 = chyba",
+            help="Akumulovaná chyba e pre vektor e₁. Ak e = 0, hlas je správny (ℓ = c₁). Ak e = 1, šum bit prevrátil.",
         )
 
     st.markdown("---")
@@ -536,6 +635,10 @@ def render():
         max_value=max_steps_in_run,
         value=max_steps_in_run,
         format="Krok %d",
+        help=(
+            "Krok 0 predstavuje východiskové vzorky (0-vzorky). "
+            "Každý ďalší krok vynuluje stĺpce jedného bloku pomocou XOR operácie medzi vektormi s rovnakým vzorom."
+        ),
     )
 
     step_data = run_history[selected_step]
@@ -547,29 +650,59 @@ def render():
 
     col_mat, col_cls = st.columns([3, 2])
     with col_mat:
-        st.markdown(
-            f"##### Matica vzoriek X v kroku {selected_step} (zobrazených max 35 riadkov)"
-        )
-        disp_rows = min(len(X_step), 35)
-        fig_mat = px.imshow(
-            X_step[:disp_rows, :],
-            color_continuous_scale=[[0, "#ffffff"], [1, "#1f77b4"]],
-            labels=dict(x="Stĺpec (bit)", y="Riadok (vzorka)", color="Bit"),
-        )
-        fig_mat.update_layout(
-            coloraxis_showscale=False,
-            height=320,
-            margin=dict(l=10, r=10, t=20, b=10),
-        )
+        total_rows = len(X_step)
 
-        for blk in range(1, a):
-            fig_mat.add_vline(
-                x=blk * b - 0.5,
-                line_width=2,
-                line_dash="dash",
-                line_color="red",
+        if total_rows == 0:
+            st.warning("V tomto kroku nezostali žiadne vektory.")
+        else:
+            if total_rows > 1:
+                slider_key = f"disp_rows_s{selected_step}_r{selected_run_idx}"
+                if slider_key in st.session_state:
+                    if st.session_state[slider_key] > total_rows:
+                        st.session_state[slider_key] = total_rows
+                    elif st.session_state[slider_key] < 1:
+                        st.session_state[slider_key] = 1
+
+                disp_rows = st.slider(
+                    "Počet zobrazených riadkov matice X:",
+                    min_value=1,
+                    max_value=total_rows,
+                    value=min(total_rows, 35),
+                    step=1,
+                    key=slider_key,
+                    help=(
+                        "Umožňuje určiť, koľko riadkov matice X sa zobrazí v heatmape. "
+                        "Posunutím posuvníka úplne doprava zobrazíte všetky vektory prítomné v danom kroku."
+                    ),
+                )
+            else:
+                disp_rows = 1
+
+            st.markdown(
+                f"##### Matica vzoriek X v kroku {selected_step} (zobrazených {disp_rows} z {total_rows} riadkov)"
             )
-        st.plotly_chart(fig_mat, use_container_width=True)
+
+            plot_height = max(320, min(800, 50 + disp_rows * 14))
+
+            fig_mat = px.imshow(
+                X_step[:disp_rows, :],
+                color_continuous_scale=[[0, "#ffffff"], [1, "#1f77b4"]],
+                labels=dict(x="Stĺpec (bit)", y="Riadok (vzorka)", color="Bit"),
+            )
+            fig_mat.update_layout(
+                coloraxis_showscale=False,
+                height=plot_height,
+                margin=dict(l=10, r=10, t=20, b=10),
+            )
+
+            for blk in range(1, a):
+                fig_mat.add_vline(
+                    x=blk * b - 0.5,
+                    line_width=2,
+                    line_dash="dash",
+                    line_color="red",
+                )
+            st.plotly_chart(fig_mat, use_container_width=True)
 
     with col_cls:
         st.markdown(f"##### Skupiny rovnakých vektorov v kroku {selected_step}")
