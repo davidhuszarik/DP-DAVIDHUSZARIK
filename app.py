@@ -1,6 +1,6 @@
 import streamlit as st
 
-from views import bkw_simulation, lpn_intro
+from views import bkw_simulation, lpn_intro, bkw2_simulation
 
 st.set_page_config(
     page_title="learnBKW | LPN & BKW Educational App",
@@ -122,6 +122,7 @@ st.markdown(
 menu_options = [
     "1. LPN problém",
     "2. BKW algoritmus",
+    "3. BKW* algoritmus",
 ]
 
 with st.sidebar:
@@ -162,6 +163,6 @@ if selected_index == 0:
 elif selected_index == 1:
     bkw_simulation.render()
 elif selected_index == 2:
-    covering_codes.render()
+    bkw2_simulation.render()
 elif selected_index == 3:
     crypto_impact.render()
