@@ -5,17 +5,30 @@ import plotly.graph_objects as go
 import streamlit as st
 
 
-def compute_bkw_theory(a: int, eta: float, delta: float = 0.05):
+def compute_bkw_theory(k: int, a: int, b: int, eta: float, delta: float = 0.05):
     initial_bias = 1.0 - 2.0 * eta
     accumulated_eqs = 2 ** (a - 1)
-    theoretical_bias = initial_bias ** accumulated_eqs
+    theoretical_bias = initial_bias**accumulated_eqs
     gamma = 0.5 * theoretical_bias
     p_success_single = 0.5 + gamma
 
     if gamma > 1e-12:
-        n_min = int(np.ceil(np.log(1.0 / delta) / (2.0 * (gamma ** 2))))
+        n_min = int(np.ceil(np.log(1.0 / delta) / (2.0 * (gamma**2))))
     else:
         n_min = float("inf")
+
+    # Teoretický počet vzoriek z orákula na 1 beh (BKW Lemma 4):
+    s_single_run = a * (2**b)
+    # Pravdepodobnosť nájdenia e_1 v jednom behu s veľkosťou a*2^b:
+    p_find_e1 = 1.0 - 1.0 / np.e  # cca 63.2 %
+
+    # Celkový teoretický počet vzoriek z orákula na zistenie 1 bitu:
+    if n_min != float("inf"):
+        oracle_samples_1bit = int(np.ceil(n_min * (s_single_run / p_find_e1)))
+        oracle_samples_full_k = int(oracle_samples_1bit * k)
+    else:
+        oracle_samples_1bit = float("inf")
+        oracle_samples_full_k = float("inf")
 
     return {
         "initial_bias": initial_bias,
@@ -24,6 +37,10 @@ def compute_bkw_theory(a: int, eta: float, delta: float = 0.05):
         "gamma": gamma,
         "p_success_single": p_success_single,
         "n_min": n_min,
+        "s_single_run": s_single_run,
+        "p_find_e1": p_find_e1,
+        "oracle_samples_1bit": oracle_samples_1bit,
+        "oracle_samples_full_k": oracle_samples_full_k,
     }
 
 
@@ -261,6 +278,21 @@ def run_large_scale_simulation(a, b, n_samples, eta, n_runs, base_seed):
 def render():
     st.header("2. Pôvodný BKW algoritmus")
 
+    # CSS štýl pre čistý biely border okolo rámčeka
+    st.markdown(
+        """
+        <style>
+        div[data-testid="stVerticalBlockBorderWrapper"] {
+            border: 1.5px solid #ffffff !important;
+            border-radius: 10px !important;
+            background-color: transparent !important;
+            padding: 10px !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
     col_c1, col_c2, col_c3, col_c4 = st.columns(4)
     with col_c1:
         a = st.number_input(
@@ -288,7 +320,7 @@ def render():
         k = int(a * b)
         st.caption(f"Dimenzia kľúča: **k = {k} bitov**")
 
-    rec_s = int(a * (2 ** b))
+    rec_s = int(a * (2**b))
     with col_c2:
         n_samples = st.number_input(
             "Vzorky na 1 beh (n)",
@@ -301,7 +333,34 @@ def render():
                 "Vyššia hodnota zabezpečí, že v každom bloku nájdeme dostatok dvojíc na elimináciu."
             ),
         )
-        st.caption(f"Odporúčané minimum na beh: $s = {rec_s}$")
+        st.caption(f"Odporúčané minimum na beh: **$s = {rec_s}$**")
+
+        s_detail_box = (
+            st.popover("Ako sa to vyrátalo?", use_container_width=True)
+            if hasattr(st, "popover")
+            else st.expander("Ako sa to vyrátalo?", expanded=False)
+        )
+
+        with s_detail_box:
+            st.markdown(
+                f"""
+                **Odvodenie minima $s = a \\cdot 2^b$ (BKW Lemma 4):**
+
+                1. **Priehradkový princíp ($2^b$):**
+                   Každý blok má šírku $b = {b}$ bitov, čo predstavuje $2^{{{b}}} = {2**b}$ možných kombinácií (priehradiek).
+
+                2. **Strata pivotov v každom kroku:**
+                   V každej priehradke s aspoň 2 vzorkami slúži 1 vzorka ako pivot na odčítanie ostatných, čím v každom kroku eliminácie stratíme najviac $2^b = {2**b}$ vzoriek.
+
+                3. **Eliminácia $a - 1$ blokov:**
+                   Eliminujeme postupne $a - 1 = {a - 1}$ blokov. Celková strata vzoriek počas eliminácie je:
+                   $$(a - 1) \\cdot 2^b = {a - 1} \\cdot {2**b} = {(a - 1) * (2**b)}\\text{{ vzoriek}}$$
+
+                4. **Zostávajúce vzorky pre cieľ $e_1$:**
+                   Aby v záverečnom bloku zostalo aspoň $2^b = {2**b}$ vektorov na úspešné nájdenie bázového vektora $e_1$, počiatočný počet musí splniť:
+                   $$s \\ge (a - 1) \\cdot 2^b + 2^b = a \\cdot 2^b = {a} \\cdot {2**b} = \\mathbf{{{rec_s}\\text{{ vzoriek}}}}$$
+                """
+            )
 
     with col_c3:
         eta = st.slider(
@@ -327,7 +386,7 @@ def render():
         )
         delta = 1.0 - desired_confidence
 
-    theory = compute_bkw_theory(a, eta, delta)
+    theory = compute_bkw_theory(k, a, b, eta, delta)
     n_min_theor = theory["n_min"]
 
     with col_c4:
@@ -336,82 +395,78 @@ def render():
             min_value=1,
             max_value=9999,
             value=42,
-            help=(
-                "Počiatočná hodnota generátora pseudonáhodných čísel. "
-                "Zabezpečuje presnú reprodukovateľnosť rovnakého tajného kľúča c a rovnakých vzoriek."
-            ),
+            help="Počiatočná hodnota generátora pseudonáhodných čísel.",
         )
 
         if n_min_theor != float("inf"):
-            st.metric(
-                label="Min. počet behov ($N_{\\min}$)",
-                value=f"{n_min_theor} behov",
-                delta=f"pre istotu {desired_confidence * 100:.0f} %",
-                delta_color="normal",
-                help=(
-                    f"Minimálny teoretický počet nezávislých behov (N_min = ⌈ln(1/δ) / (2γ²)⌉), "
-                    f"aby väčšinové hlasovanie s pravdepodobnosťou aspoň {desired_confidence * 100:.1f} % "
-                    f"určilo bit správne."
-                ),
-            )
-
-            # Edukatívne vysvetlenie výpočtu
-            detail_box = (
-                st.popover("ℹ️ Ako sa to vyrátalo?", use_container_width=True)
-                if hasattr(st, "popover")
-                else st.expander("ℹ️ Ako sa to vyrátalo?", expanded=False)
-            )
-
-            with detail_box:
-                st.markdown(
-                    f"""
-                    **Postup výpočtu $N_{{\\min}} = {n_min_theor}$ behov:**
-
-                    1. **Akumulácia rovníc v eliminácii:**
-                       Každý beh vyjadrí cieľový vektor $e_1$ ako súčet $s = 2^{{a-1}} = 2^{{{a}-1}} = \\mathbf{{{theory['accumulated_eqs']}}}$ pôvodných rovníc.
-
-                    2. **Konečný bias (Piling-up Lemma):**
-                       Chyby sa sčítajú modulo 2, takže počiatočný bias $\\epsilon_0 = 1 - 2\\eta = {theory['initial_bias']:.2f}$ klesne na:
-                       $$\\epsilon_{{\\text{{final}}}} = (1 - 2\\eta)^s = ({theory['initial_bias']:.2f})^{{{theory['accumulated_eqs']}}} = \\mathbf{{{theory['theoretical_bias']:.4f}}}$$
-
-                    3. **Výhoda nad náhodou ($\\gamma$):**
-                       Úspešnosť jedného behu je $P = \\frac{{1}}{{2}} + \\gamma$:
-                       $$\\gamma = \\frac{{\\epsilon_{{\\text{{final}}}}}}{{2}} = \\frac{{{theory['theoretical_bias']:.4f}}}{{2}} = \\mathbf{{{theory['gamma']:.4f}}}$$
-                       *(Jeden beh trafí správny bit s pravdepodobnosťou len **{theory['p_success_single'] * 100:.2f} %**)*.
-
-                    4. **Hoeffdingova nerovnosť:**
-                       Aby celkové väčšinové hlasovanie zlyhalo s pravdepodobnosťou najviac $\\delta = {delta:.3f}$ (istota **{desired_confidence * 100:.1f} %**):
-                       $$N_{{\\min}} = \\left\\lceil \\frac{{\\ln(1/\\delta)}}{{2\\gamma^2}} \\right\\rceil = \\left\\lceil \\frac{{\\ln(1/{delta:.3f})}}{{2 \\cdot ({theory['gamma']:.4f})^2}} \\right\\rceil = \\mathbf{{{n_min_theor}\\text{{ behov}}}}$$
-                    """
+            with st.container(border=True):
+                st.metric(
+                    label="Min. počet behov ($N_{\\min}$)",
+                    value=f"{n_min_theor} behov",
+                    delta=f"pre istotu {desired_confidence * 100:.0f} %",
+                    delta_color="normal",
                 )
+
+                st.metric(
+                    label="Potrebné vzorky z orákula",
+                    value=f"{theory['oracle_samples_1bit']:,}",
+                    delta=f"pre 1 bit ({theory['oracle_samples_full_k']:,} pre celé k)",
+                    delta_color="off",
+                    help=(
+                        "Celkový počet dopytov, ktoré musí pôvodný BKW získať od orákula na nájdenie 1 bitu: "
+                        "M = N_min · (a · 2^b / (1 - 1/e)). Na rozdiel od BKW* sa vzorky medzi behmi nesmú recyklovať."
+                    ),
+                )
+
+                detail_box = (
+                    st.popover(
+                        " Odvodenie počtu vzoriek", use_container_width=True
+                    )
+                    if hasattr(st, "popover")
+                    else st.expander(
+                        " Odvodenie počtu vzoriek", expanded=False
+                    )
+                )
+
+                with detail_box:
+                    st.markdown(
+                        f"""
+                        **Prečo pôvodný BKW spotrebuje toľko vzoriek z orákula?**
+
+                        1. **Požiadavka na nezávislosť:**
+                           Pôvodný BKW (2000) vyžaduje, aby každý z $N_{{\\min}} = {n_min_theor}$ behov eliminácie bežal na **úplne nových, čerstvých vzorkách** z orákula. Žiadne rovnice sa nerecyklujú.
+
+                        2. **Vzorky na 1 úspešný zásah $e_1$:**
+                           Jeden beh spotrebuje $s = a \\cdot 2^b = {theory['s_single_run']}$ vzoriek.
+                           Pravdepodobnosť, že v podpriestore $V_{{a-1}}$ vznikne hľadaný vektor $e_1$, je $1 - 1/e \\approx 63.2\\,\\%$.
+                           Na získanie jedného hlasu teda v priemere potrebujeme:
+                           $$\\frac{{a \\cdot 2^b}}{{1 - 1/e}} = \\frac{{{theory['s_single_run']}}}{{0.632}} \\approx \\mathbf{{{int(np.ceil(theory['s_single_run'] / theory['p_find_e1']))}\\text{{ vzoriek/hlas}}}}$$
+
+                        3. **Celkový počet vzoriek na 1 bit:**
+                           $$M_{{\\text{{oracle}}}} = N_{{\\min}} \\cdot \\frac{{a \\cdot 2^b}}{{1 - 1/e}} = {n_min_theor} \\cdot {int(np.ceil(theory['s_single_run'] / theory['p_find_e1']))} = \\mathbf{{{theory['oracle_samples_1bit']:,}\\text{{ vzoriek}}}}$$
+
+                        4. **Celý kľúč ($k = {k}$ bitov):**
+                           Pri nezávislom zistení všetkých $k$ bitov je celková spotreba orákula:
+                           $$k \\cdot M_{{\\text{{oracle}}}} = {k} \\cdot {theory['oracle_samples_1bit']:,} = \\mathbf{{{theory['oracle_samples_full_k']:,}\\text{{ vzoriek}}}}$$
+                        """
+                    )
         else:
             st.warning("⚠️ Príliš nízky bias (výhoda γ ≈ 0).")
 
     st.markdown("#### Rozsah simulácie väčšinového hlasovania")
-    col_n1, col_n2 = st.columns([3, 1])
-    with col_n1:
-        default_runs = (
-            min(n_min_theor, 300)
-            if (n_min_theor != float("inf") and n_min_theor > 0)
-            else 100
-        )
-        n_runs = st.number_input(
-            "Celkový počet behov (N):",
-            min_value=5,
-            max_value=5000,
-            value=int(default_runs),
-            step=10,
-            help=(
-                "Celkový počet nezávislých behov eliminácie. Keďže jeden beh má kvôli šumu len malú "
-                "výhodu (úspešnosť 1/2 + γ), správny bit c₁ určíme až väčšinovým hlasovaním z N behov. "
-                "Čím viac behov vykonáme, tým spoľahlivejšie prekonáme vplyv šumu."
-            ),
-        )
-    with col_n2:
-        st.write("")
-        st.write("")
-        if n_min_theor != float("inf") and n_min_theor <= 5000:
-            st.info(f"💡 Teória odporúča: **N ≥ {n_min_theor}** behov")
+    default_runs = (
+        min(n_min_theor, 300)
+        if (n_min_theor != float("inf") and n_min_theor > 0)
+        else 100
+    )
+    n_runs = st.number_input(
+        "Celkový počet behov (N):",
+        min_value=5,
+        max_value=5000,
+        value=int(default_runs),
+        step=10,
+        help="Celkový počet nezávislých behov eliminácie. Každý beh generuje novú sadu vzoriek.",
+    )
 
     c_true, runs_summary, cum_0, cum_1, cum_ratio = run_large_scale_simulation(
         a, b, n_samples, eta, n_runs, seed
@@ -433,35 +488,45 @@ def render():
         else 1.0
     )
 
+    # Reálne vygenerované vzorky v tejto simulácii:
+    actual_samples_generated = n_runs * n_samples
+
     st.divider()
-    m1, m2, m3, m4 = st.columns(4)
+    m1, m2, m3, m4, m5 = st.columns(5)
     with m1:
         st.metric(
             "Skutočný kľúč c",
             f"{c_true.tolist()}",
             f"1. bit c₁ = {true_c1}",
-            help="Náhodný tajný kľúč c, ktorý bol vygenerovaný orákulom. Algoritmus sa v tejto fáze pokúša zistiť jeho 1. bit c₁.",
+            help="Náhodný tajný kľúč c vygenerovaný orákulom.",
         )
     with m2:
         st.metric(
             "Výsledok väčšiny (ĉ₁)",
             f"{winner}" if winner != -1 else "Remíza",
             "Správne odhalený" if is_winner_correct else "Chyba",
-            help="Hodnota bitu (0 alebo 1), ktorá získala nadpolovičnú väčšinu hlasov zo všetkých úspešných behov.",
+            help="Hodnota bitu, ktorá získala väčšinu hlasov z úspešných behov.",
         )
     with m3:
         st.metric(
             "Pomer hlasov [0 : 1]",
             f"{votes_0_total} : {votes_1_total}",
             f"Z {total_valid} úspešných behov",
-            help="Rozdelenie hlasov pre jednotlivé bity. Pomer vyjadruje empirický bias v prospech správneho bitu.",
+            help="Rozdelenie hlasov pre jednotlivé bity.",
         )
     with m4:
+        st.metric(
+            "Vzorky v simulácii",
+            f"{actual_samples_generated:,}",
+            f"{n_runs} behov × {n_samples}",
+            help="Skutočný celkový počet rovníc vygenerovaných v tejto interaktívnej simulácii.",
+        )
+    with m5:
         st.metric(
             "Horná hranica chyby",
             f"{hoeffding_error_bound:.4e}",
             f"Cieľová δ = {delta:.3f}",
-            help="Pravdepodobnosť, že väčšinové hlasovanie zlyhalo po N behoch, ohraničená Hoeffdingovou nerovnosťou exp(-2Nγ²).",
+            help="Pravdepodobnosť, že väčšinové hlasovanie zlyhalo po N behoch.",
         )
 
     with st.expander(
@@ -479,16 +544,16 @@ def render():
            $$P(\\text{{úspech}}) = \\frac{{1}}{{2}} + \\gamma = \\frac{{1}}{{2}} + \\frac{{1}}{{2}}\\epsilon_{{\\text{{final}}}} = {theory['p_success_single'] * 100:.2f} \\%$$
 
         3. **Hoeffdingova nerovnosť a minimálny počet behov ($N_{{\\min}}$):**
-           Pravdepodobnosť, že väčšinové hlasovanie zlyhá po $N$ behoch, je zhora ohraničená:
-           $$P(\\text{{chyba}}) \\le e^{{-2N\\gamma^2}} \\le \\delta \\implies N \\ge \\frac{{\\ln(1/\\delta)}}{{2\\gamma^2}} = \\mathbf{{{n_min_theor}\\text{{ behov}}}}$$
+           $$N \\ge \\frac{{\\ln(1/\\delta)}}{{2\\gamma^2}} = \\mathbf{{{n_min_theor}\\text{{ behov}}}}$$
+
+        4. **Celkový počet vzoriek z orákula na 1 bit:**
+           $$M_{{\\text{{oracle}}}} = N_{{\\min}} \\cdot \\frac{{a \\cdot 2^b}}{{1 - 1/e}} = \\mathbf{{{theory['oracle_samples_1bit']:,}\\text{{ vzoriek}}}}$$
         """
         )
 
     st.divider()
 
-    st.subheader(
-        f"1. Priebeh väčšinového hlasovania (N = {n_runs} behov)"
-    )
+    st.subheader(f"1. Priebeh väčšinového hlasovania (N = {n_runs} behov)")
 
     g_col1, g_col2 = st.columns(2)
     with g_col1:
@@ -581,11 +646,7 @@ def render():
         max_value=n_runs,
         value=1,
         step=1,
-        help=(
-            "Vyberte konkrétny simulačný beh na podrobnú analýzu. "
-            "Uvidíte presný priebeh eliminácie krok po kroku: rozdelenie do tried, "
-            "XOR operácie a rodokmeň cieľového vektora e₁."
-        ),
+        help="Vyberte konkrétny simulačný beh na podrobnú analýzu eliminácie krok po kroku.",
     )
 
     run_seed = seed * 10000 + selected_run_idx
@@ -602,7 +663,7 @@ def render():
             "Nájdený cieľový vektor e₁",
             "Áno" if chosen_run_data["found"] else "Nie",
             f"Vyskytol sa {chosen_run_data['matches_count']}×",
-            help="Indikuje, či v poslednom kroku eliminácie vznikol hľadaný vektor e₁ = (1, 0, 0, ..., 0).",
+            help="Indikuje, či v poslednom kroku eliminácie vznikol vektor e₁ = (1, 0, ..., 0).",
         )
     with c_run3:
         st.metric(
@@ -613,20 +674,18 @@ def render():
                 else "Žiadny"
             ),
             f"Skutočný bit c₁ = {true_c1}",
-            help="Hodnota štítku (ℓ) prislúchajúca vektoru e₁. Táto hodnota slúži ako hlas behu pre bit c₁.",
+            help="Hodnota štítku (ℓ) prislúchajúca vektoru e₁.",
         )
     with c_run4:
         st.metric(
             "Výsledná chyba (e)",
             f"{chosen_run_data['err']}" if chosen_run_data["found"] else "—",
             "0 = bez chyby | 1 = chyba",
-            help="Akumulovaná chyba e pre vektor e₁. Ak e = 0, hlas je správny (ℓ = c₁). Ak e = 1, šum bit prevrátil.",
+            help="Akumulovaná chyba e pre vektor e₁.",
         )
 
     st.markdown("---")
-    st.markdown(
-        f"#### Kroky eliminácie v behu #{selected_run_idx}"
-    )
+    st.markdown(f"#### Kroky eliminácie v behu #{selected_run_idx}")
 
     max_steps_in_run = len(run_history) - 1
     selected_step = st.slider(
@@ -635,10 +694,7 @@ def render():
         max_value=max_steps_in_run,
         value=max_steps_in_run,
         format="Krok %d",
-        help=(
-            "Krok 0 predstavuje východiskové vzorky (0-vzorky). "
-            "Každý ďalší krok vynuluje stĺpce jedného bloku pomocou XOR operácie medzi vektormi s rovnakým vzorom."
-        ),
+        help="Krok 0 sú východiskové vzorky. Každý ďalší krok eliminuje stĺpce jedného bloku.",
     )
 
     step_data = run_history[selected_step]
@@ -670,10 +726,6 @@ def render():
                     value=min(total_rows, 35),
                     step=1,
                     key=slider_key,
-                    help=(
-                        "Umožňuje určiť, koľko riadkov matice X sa zobrazí v heatmape. "
-                        "Posunutím posuvníka úplne doprava zobrazíte všetky vektory prítomné v danom kroku."
-                    ),
                 )
             else:
                 disp_rows = 1
@@ -719,12 +771,8 @@ def render():
             st.info("Krok 0: východiskový stav pred elimináciou.")
 
     if step_data["operations_log"]:
-        st.markdown(
-            f"##### Záznam operácií XOR v kroku {selected_step}"
-        )
-        st.caption(
-            "Ukážka sčítania dvoch riadkov a prenosu chýb:"
-        )
+        st.markdown(f"##### Záznam operácií XOR v kroku {selected_step}")
+        st.caption("Ukážka sčítania dvoch riadkov a prenosu chýb:")
         st.dataframe(
             pd.DataFrame(step_data["operations_log"]),
             height=200,
@@ -732,9 +780,7 @@ def render():
         )
 
     if selected_step == max_steps_in_run and chosen_run_data["found"]:
-        st.markdown(
-            f"##### Pôvod vektora e₁ v behu #{selected_run_idx}"
-        )
+        st.markdown(f"##### Pôvod vektora e₁ v behu #{selected_run_idx}")
         first_match_idx = chosen_run_data["matches_indices"][0]
         src_row_ids = step_data["lineage"][first_match_idx]
 
