@@ -274,7 +274,7 @@ def render():
         )
         theta = st.selectbox(
             "Tolerancia zlyhania bloku (θ)",
-            [0.10, 0.20, 0.333, 0.50],
+            [0.10, 0.20, 0.333, 0.50, 0.05],
             index=2,
             help=(
                 "Maximálna akceptovateľná pravdepodobnosť, že aspoň jeden bit z b-bitového bloku bude uhádnutý nesprávne. "
